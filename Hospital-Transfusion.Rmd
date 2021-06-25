@@ -1,0 +1,174 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+getwd()
+Admission_Data = read.csv("C:\\Users\\Mohsen\\Downloads\\Admissions.csv")
+Transfusions_Data = read.csv("C:\\Users\\Mohsen\\Downloads\\Transfusions.csv")
+Lab_Data = read.csv("C:\\Users\\Mohsen\\Downloads\\Lab.csv")
+install.packages("ggplot2")
+library(ggplot2)
+```
+
+1. Impute the missing charlson_comorbidity_index values in any way you see
+fit, with the intention that this variable will be used as a predictor in a
+statistical model.
+```{r}
+## 1. 
+
+# Missing Value imputation
+m <- sapply(Admission_Data, function(x) sum(is.na(x))) # 'x' takes all the variables in our dataset
+m <- as.data.frame(m)
+View(m) # Shows the number of missing values for each variable
+
+#There are 261 missing values in variable. Replacing all missing values with '0' for model fitting purpose
+Admission_Data$charlson_comorbidity_index[is.na(Admission_Data$charlson_comorbidity_index)] <- 0
+#No missing value found for charlson_comorbidity_index after the imputation
+```
+
+
+2. Determine if there is a significant difference in sex between patients who
+had an rbc_transfusion and patients that did not.Fit a linear regression model using the result_value of the “Platelet Count” lab tests
+as the dependent variable and age, sex, and hospital as the independent variables.
+Briefly interpret the results.
+```{r}
+##2.
+
+names(Transfusions_Data)
+Combined_Data = merge(Admission_Data, Transfusions_Data, by="admission_id")
+#The combined data has the records equal to that of the transfusion data
+
+#Loading the required function to get the crosstabs
+source("http://pcwww.liv.ac.uk/~william/R/crosstab.r")
+crosstab(Combined_Data, row.vars = "rbc_transfusion", col.vars = "sex", type = "r")
+#Interpretation:
+#There can be a significant difference in sex between patients who had an 
+#RBC Transfusion (with a ratio of ~60:40) as compared fo those who didn't 
+#( with a proportion of ~56:44)
+```
+
+4. Create one or multiple plots that demonstrate the relationships between
+length_of_stay (discharge date and time minus admission date and time),
+charlson_comorbidity_index, and age.
+
+```{r}
+##3.
+
+#Fitting of the linear regression model:
+Lab_Data_subsetted = Lab_Data[Lab_Data$test_code == "PLT",]
+Regression_Data = merge(Admission_Data, Lab_Data_subsetted, by="admission_id")
+s <- lm(result_value~age+sex+hospital , data = Regression_Data)
+summary(s)
+#Interpretation:
+#From the summary, we can say that the variable sex with male category is the most significant variable with p value = 0.00027( < 0.05) followed by age with p-value = 0.01730( < 0.05)at 5% levle of significance.
+#We can also say thaht that variable hospital is insignificant at 5% level of confidence (all p -values are < 0.05)
+#There is increase in the result_value of plasma transfusion with an increase in the age of patients, males patients and hospitals like "hospitalSt. Joseph's Health Centre" and "hospitalSunnybrook Health Sciences Centre" and vice versa.
+#The overall regression model proves to be significant with a p-value of 0.005084(< 0.05) at 5% level of significance.
+```
+
+4. Create one or multiple plots that demonstrate the relationships between
+length_of_stay (discharge date and time minus admission date and time),
+charlson_comorbidity_index, and age.
+```{r}
+##4.
+#Converting dischage date and admission date to date datatype and discharge time and admission time into timestamp dataatype as they were in string format
+
+#For discharge
+Admission_Data$discharge_datetime   <- as.POSIXct(paste(as.Date(Admission_Data$discharge_date, "%d/%m/%Y"), Admission_Data$discharge_time), format="%Y-%m-%d %M:%S")
+#For admission
+Admission_Data$admission_datetime   <- as.POSIXct(paste(as.Date(Admission_Data$admission_date), Admission_Data$admission_time), format="%Y-%m-%d %M:%S")
+
+#Length of stay computation:
+Admission_Data$length_of_stay <- Admission_Data$discharge_datetime-Admission_Data$admission_datetime
+
+#Different plots to analyse the data
+
+#Plot 1: Boxplot of the charlson comorbidity index across length of stay
+ggplot(Admission_Data, aes(x=factor(charlson_comorbidity_index),y=length_of_stay,color=age))+
+  geom_boxplot(size=1,outlier.shape = 1,outlier.color = "black",outlier.size  = 3) +
+  geom_jitter(alpha = 0.5,width=.2) + 
+  labs(title = "Trend of charlson comorbidity index across different length of stay ", 
+       y="Length of stay", x = "Charlson Comorbidity Index") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  coord_flip()
+#In this plot, the density of colour represents the age of patient, darker the shade, higher the age.
+
+#Plot 2: 
+#Scatter plot to see the clusters of charlson comorbidity index created across differnet age valuea
+ggplot(Admission_Data,mapping = aes(x=age,y=length_of_stay,fill=charlson_comorbidity_index))+
+  geom_point(color=Admission_Data$charlson_comorbidity_index,alpha = .7, size = 3) +
+  #scale_x_continuous(breaks =seq(0,30,5))+
+  #scale_y_continuous(breaks = seq(2,18,2))+
+  labs(title = "Relationship between Age & Charlson Comorbidity Index")
+```
+
+5. You are interested in evaluating the effect of platelet transfusions on a
+disease. The patients with platelet_transfusion represent the selected treatment
+group. Select a control group in any way you see fit.
+How could you improve your selection if you had more data and access to any
+clinical variable you can think of?
+```{r}
+##5. 
+
+Max_Platelet_Transfusion <- max(Lab_Data[Lab_Data$test_code =="PLT","result_value"])
+Max_Platelet_Transfusion
+#As the maximum result value from platelet transfusion is 401 units, the control group will be the one having the result value near 401 units.
+
+Range_Platelet_Transfusion <- range(Lab_Data[Lab_Data$test_code =="PLT","result_value"])
+Range_Platelet_Transfusion
+#With more data and access to any other clinical variable, the range of the
+#result value at a patient level will be higher and that would increase the 
+#condidence interval and ensure that the result values of the 
+#new patient having the clinical variable transfusion will lie in that particular range 
+#just like the range of platelet transfusion is 0 t0 401.
+
+```
+
+
+6. Fit a first-iteration statistical model of your choosing to predict the
+result_value of the “Hemoglobin” lab tests and evaluate its performance.
+How could you improve the model if you had more data and access to any
+clinical variable you can think of?
+```{r}
+##6.
+
+library(MASS)
+Hemoglobin_Data = Lab_Data[Lab_Data$test_code =="RBC",]
+
+#Merging with the admission data to run a step wise iterative regression model 
+#with age, hospital and sex as the predictors
+
+Hemoglobin_Data = merge(Admission_Data, Hemoglobin_Data, by="admission_id")
+Hemoglobin_Data_Updated <- Hemoglobin_Data[complete.cases(Hemoglobin_Data),] #removal of all rows having missing values
+# Fit the full model 
+full.model <- lm(result_value~age+sex+hospital, data = Hemoglobin_Data_Updated)
+# Stepwise regression model
+step.model <- stepAIC(full.model, direction = "both",trace = FALSE)
+summary(step.model)
+#With the iterative statistical technique of stepwise regression, we can 
+#say that the overall regression model is significant with p-value = 0.0002423 (<0.05) at 5% level of sifnificance.
+#Also the variables like max patients and hospotal like hospitalToronto Western Hospital have turned out to 
+#be significant (p-value < 0.05) at 5% level of significance.
+
+#How could you improve the model if you had more data and access to any 
+#clinical variable you can think of?
+
+#The model can be improvided with more numeric values and an indepth analysis can be gauged.
+#Also, with increase in the number of records, more variability in the data can be onserved 
+#thereby the results and conclusion obtained with a larger dataset for any 
+#clinical variable would increase the reliability of the results obtained through model fitting and 
+#thereby increase the accuracy of our conclusions.
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
